@@ -1,0 +1,708 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AIO-Search</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+        }
+        select:focus, input:focus {
+            outline: 2px solid #2563eb; /* blue-600 */
+            outline-offset: 2px;
+        }
+        .action-button { 
+            transition: background-color 0.3s ease, transform 0.1s ease, box-shadow 0.3s ease;
+            box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.1), 0 1px 2px -1px rgba(0, 0, 0, 0.1);
+        }
+        .action-button:hover {
+            opacity: 0.9;
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -2px rgba(0, 0, 0, 0.1);
+        }
+        .action-button:active {
+            transform: translateY(1px);
+            box-shadow: inset 0 2px 4px 0 rgba(0,0,0,0.05);
+        }
+        .message-box {
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            padding: 1rem;
+            border-radius: 0.5rem;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+            z-index: 1050; 
+            opacity: 0;
+            transform: translateY(-20px);
+            transition: opacity 0.3s ease, transform 0.3s ease;
+        }
+        .message-box.show {
+            opacity: 1;
+            transform: translateY(0);
+        }
+        .message-box.error {
+            background-color: #fef2f2; 
+            color: #b91c1c; 
+            border: 1px solid #fecaca; 
+        }
+        .message-box.info {
+            background-color: #eff6ff; 
+            color: #1d4ed8; 
+            border: 1px solid #bfdbfe; 
+        }
+        optgroup {
+            font-weight: bold;
+            background-color: #374151; 
+            color: #d1d5db; 
+        }
+        .loading-spinner {
+            border: 4px solid rgba(255, 255, 255, 0.3);
+            border-radius: 50%;
+            border-top: 4px solid #fff;
+            width: 20px;
+            height: 20px;
+            animation: spin 1s linear infinite;
+            display: inline-block; 
+            margin-left: 8px;
+        }
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+        .modal {
+            position: fixed;
+            z-index: 1000;
+            left: 0;
+            top: 0;
+            width: 100%;
+            height: 100%;
+            overflow: auto;
+            background-color: rgba(0,0,0,0.5); 
+            display: flex; 
+            align-items: center; 
+            justify-content: center; 
+        }
+        .modal-content {
+            background-color: #2d3748; 
+            color: #e2e8f0; 
+            margin: auto;
+            padding: 20px;
+            border: 1px solid #4a5568; 
+            border-radius: 0.5rem;
+            width: 90%;
+            max-width: 500px;
+            box-shadow: 0 10px 25px rgba(0,0,0,0.5);
+            position: relative; 
+        }
+        .modal-close-button {
+            color: #a0aec0; 
+            position: absolute;
+            top: 10px;
+            right: 15px;
+            font-size: 28px;
+            font-weight: bold;
+            cursor: pointer;
+        }
+        .modal-close-button:hover,
+        .modal-close-button:focus {
+            color: #cbd5e0; 
+            text-decoration: none;
+        }
+        .suggestion-item {
+            cursor: pointer;
+            padding: 0.5rem;
+            margin: 0.25rem 0;
+            background-color: #4a5568; 
+            border-radius: 0.25rem;
+            transition: background-color 0.2s ease;
+        }
+        .suggestion-item:hover {
+            background-color: #718096; 
+        }
+        /* Custom checkbox style */
+        .custom-checkbox {
+            appearance: none;
+            background-color: #4a5568; /* gray-600 */
+            border: 1px solid #718096; /* gray-500 */
+            padding: 0.4rem; /* Adjust size */
+            border-radius: 0.25rem;
+            display: inline-block;
+            position: relative;
+            cursor: pointer;
+            margin-right: 0.5rem; /* Space between checkbox and label */
+            flex-shrink: 0; /* Prevent shrinking in flex container */
+        }
+        .custom-checkbox:checked {
+            background-color: #60a5fa; /* blue-400 */
+            border-color: #3b82f6; /* blue-500 */
+        }
+        .custom-checkbox:checked::after {
+            content: '✔';
+            font-size: 0.7rem; /* Adjust checkmark size */
+            color: white;
+            position: absolute;
+            left: 50%;
+            top: 50%;
+            transform: translate(-50%, -50%);
+        }
+    </style>
+</head>
+<body class="bg-gradient-to-br from-slate-900 to-slate-800 flex flex-col items-center justify-center min-h-screen p-4 text-white">
+
+    <div class="w-full max-w-2xl bg-slate-800/50 backdrop-blur-md p-6 sm:p-8 md:p-10 rounded-xl shadow-2xl border border-slate-700">
+        <header class="text-center mb-8">
+            <h1 class="text-3xl sm:text-4xl font-bold text-transparent bg-clip-text bg-gradient-to-r from-sky-400 via-purple-500 to-pink-500">AIO-Search</h1>
+        </header>
+
+        <form id="searchForm" class="space-y-6">
+            <div class="flex flex-col sm:flex-row sm:space-x-4 space-y-4 sm:space-y-0 items-end">
+                <div class="w-full sm:flex-grow">
+                    <label for="searchQuery" class="block text-sm font-medium text-slate-300 mb-1">Votre recherche :</label>
+                    <input type="text" id="searchQuery" name="searchQuery"
+                           class="w-full px-4 py-3 bg-slate-700 border border-slate-600 rounded-lg text-white placeholder-slate-500 focus:ring-2 focus:ring-sky-500 focus:border-sky-500 transition duration-150 ease-in-out"
+                           placeholder="Entrez votre recherche...">
+                </div>
+                <div class="w-full sm:w-auto sm:min-w-[200px] flex-shrink-0">
+                    <label for="searchEngine" class="block text-sm font-medium text-slate-300 mb-1">Source :</label>
+                    <select id="searchEngine" name="searchEngine"
+                            class="w-full px-4 py-3 bg-slate-700 border border-slate-600 rounded-lg text-white focus:ring-2 focus:ring-sky-500 focus:border-sky-500 transition duration-150 ease-in-out appearance-none bg-no-repeat bg-right-4"
+                            style="background-image: url('data:image/svg+xml;charset=US-ASCII,%3Csvg%20xmlns%3D%22http%3A//www.w3.org/2000/svg%22%20width%3D%2220%22%20height%3D%2220%22%20fill%3D%22%239ca3af%22%3E%3Cpath%20d%3D%22M5.293%207.293a1%201%200%20011.414%200L10%2010.586l3.293-3.293a1%201%200%20111.414%201.414l-4%204a1%201%200%2001-1.414%200l-4-4a1%201%200%20010-1.414z%22%20/%3E%3C/svg%3E');">
+                    </select>
+                </div>
+            </div>
+            <div class="flex items-center mt-2">
+                <input type="checkbox" id="setDefaultEngineCheckbox" class="custom-checkbox">
+                <label for="setDefaultEngineCheckbox" class="text-sm text-slate-400 cursor-pointer">Définir comme source par défaut</label>
+            </div>
+
+            <div id="querySuggestions" class="mt-2 text-sm text-slate-300"></div>
+            <div id="geminiLoadingSpinner" class="loading-spinner my-2 mx-auto" style="display: none;"></div>
+
+            <div class="flex flex-col sm:flex-row sm:space-x-3 space-y-3 sm:space-y-0 pt-2">
+                <button type="button" id="suggestQueriesBtn" title="Suggérer des requêtes alternatives avec Gemini"
+                        class="w-full sm:w-1/3 action-button flex items-center justify-center p-3 bg-purple-600 hover:bg-purple-700 text-white rounded-lg font-medium">
+                    <span class="mr-2">✨</span> Suggérer
+                </button>
+            
+                 <button type="button" id="defineTermBtn" 
+                    class="w-full sm:w-1/3 action-button flex items-center justify-center bg-teal-600 hover:bg-teal-700 text-white font-semibold py-3 px-4 rounded-lg">
+                    <span class="mr-2">💡</span> Définir
+                </button>
+
+                <button type="submit"
+                        class="w-full sm:w-1/3 action-button flex items-center justify-center bg-gradient-to-r from-sky-500 via-blue-600 to-indigo-600 hover:from-sky-600 hover:via-blue-700 hover:to-indigo-700 text-white font-semibold py-3 px-4 rounded-lg shadow-md">
+                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" class="w-5 h-5 mr-2">
+                        <path fill-rule="evenodd" d="M9 3.5a5.5 5.5 0 100 11 5.5 5.5 0 000-11zM2 9a7 7 0 1112.452 4.391l3.328 3.329a.75.75 0 11-1.06 1.06l-3.329-3.328A7 7 0 012 9z" clip-rule="evenodd" />
+                    </svg>
+                    Rechercher
+                </button>
+            </div>
+        </form>
+    </div>
+
+    <div id="definitionModal" class="modal" style="display: none;">
+        <div class="modal-content">
+            <span class="modal-close-button" id="closeModalBtn">×</span>
+            <h3 class="text-xl font-semibold mb-3 text-sky-400">Définition / Explication ✨</h3>
+            <div id="geminiDefinitionResult" class="text-slate-300 whitespace-pre-wrap">
+                Chargement de la définition...
+            </div>
+            <div id="geminiDefinitionLoadingModal" class="loading-spinner mx-auto mt-4" style="display: none;"></div>
+        </div>
+    </div>
+
+    <div id="messageBox" class="message-box"></div>
+
+    <footer class="mt-12 text-center">
+        <p class="text-slate-500 text-sm">© <span id="currentYear"></span> AIO-Search. Tous droits réservés.</p>
+    </footer>
+
+    <script>
+        // Fonction pour afficher les messages
+        function showMessage(message, type = 'error', duration = 3000) {
+            const messageBox = document.getElementById('messageBox');
+            messageBox.textContent = message;
+            messageBox.className = `message-box ${type} show`;
+            setTimeout(() => {
+                messageBox.classList.remove('show');
+            }, duration);
+        }
+        
+        const geminiLoadingSpinner = document.getElementById('geminiLoadingSpinner');
+        const querySuggestionsDiv = document.getElementById('querySuggestions');
+        const suggestQueriesBtn = document.getElementById('suggestQueriesBtn');
+        const defineTermBtn = document.getElementById('defineTermBtn');
+        const definitionModal = document.getElementById('definitionModal');
+        const geminiDefinitionResultDiv = document.getElementById('geminiDefinitionResult');
+        const geminiDefinitionLoadingModal = document.getElementById('geminiDefinitionLoadingModal');
+        const closeModalBtn = document.getElementById('closeModalBtn');
+        const searchQueryInput = document.getElementById('searchQuery');
+        const searchEngineSelect = document.getElementById('searchEngine'); 
+        const setDefaultEngineCheckbox = document.getElementById('setDefaultEngineCheckbox');
+
+
+        // --- Gemini API Integration ---
+        const GEMINI_API_KEY = ""; 
+        const GEMINI_MODEL_TEXT = "gemini-2.0-flash";
+
+        async function callGeminiAPI(prompt, isStructured = false, schema = null, forDefinition = false) {
+            if (!forDefinition) { 
+                geminiLoadingSpinner.style.display = 'block';
+            } else { 
+                geminiDefinitionLoadingModal.style.display = 'block';
+                geminiDefinitionResultDiv.textContent = 'Chargement de la définition...';
+            }
+
+            let chatHistory = [{ role: "user", parts: [{ text: prompt }] }];
+            const payload = { contents: chatHistory };
+
+            if (isStructured && schema) {
+                payload.generationConfig = {
+                    responseMimeType: "application/json",
+                    responseSchema: schema
+                };
+            }
+            
+            const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL_TEXT}:generateContent?key=${GEMINI_API_KEY}`;
+
+            try {
+                const response = await fetch(apiUrl, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(payload)
+                });
+
+                if (!response.ok) {
+                    const errorBody = await response.text();
+                    console.error("Erreur API Gemini:", response.status, errorBody);
+                    throw new Error(`Erreur de l'API Gemini: ${response.status}. Consultez la console pour plus de détails.`);
+                }
+
+                const result = await response.json();
+
+                if (result.candidates && result.candidates.length > 0 &&
+                    result.candidates[0].content && result.candidates[0].content.parts &&
+                    result.candidates[0].content.parts.length > 0) {
+                    return result.candidates[0].content.parts[0].text;
+                } else {
+                    console.error("Réponse inattendue de l'API Gemini:", result);
+                    throw new Error("Format de réponse inattendu de l'API Gemini.");
+                }
+            } catch (error) {
+                console.error("Erreur lors de l'appel à Gemini:", error);
+                showMessage(error.message || "Une erreur est survenue avec l'API Gemini.", "error");
+                return null; 
+            } finally {
+                if (!forDefinition) {
+                    geminiLoadingSpinner.style.display = 'none';
+                } else {
+                    geminiDefinitionLoadingModal.style.display = 'none';
+                }
+            }
+        }
+
+        async function fetchSuggestedQueries() {
+            const currentQuery = searchQueryInput.value.trim();
+            if (!currentQuery) {
+                showMessage("Veuillez d'abord entrer un terme de recherche.", "info");
+                return;
+            }
+            querySuggestionsDiv.innerHTML = ''; 
+            const prompt = `Suggère 3 à 5 requêtes de recherche alternatives, plus spécifiques ou liées au terme suivant : "${currentQuery}". Ne répète pas le terme original dans les suggestions. Formatte la réponse en JSON avec une clé "suggestions" contenant un tableau de chaînes de caractères.`;
+            const suggestionsSchema = {
+                type: "OBJECT",
+                properties: { "suggestions": { type: "ARRAY", items: { type: "STRING" }}},
+                required: ["suggestions"]
+            };
+            const resultText = await callGeminiAPI(prompt, true, suggestionsSchema, false); 
+            if (resultText) {
+                try {
+                    const parsedResult = JSON.parse(resultText);
+                    if (parsedResult.suggestions && parsedResult.suggestions.length > 0) {
+                        querySuggestionsDiv.innerHTML = '<p class="font-semibold mb-1 text-slate-400">Suggestions :</p>';
+                        parsedResult.suggestions.forEach(suggestionText => {
+                            const suggElem = document.createElement('div');
+                            suggElem.textContent = suggestionText;
+                            suggElem.className = 'suggestion-item text-slate-200 hover:text-white';
+                            suggElem.onclick = () => {
+                                searchQueryInput.value = suggestionText;
+                                querySuggestionsDiv.innerHTML = ''; 
+                                searchQueryInput.focus();
+                            };
+                            querySuggestionsDiv.appendChild(suggElem);
+                        });
+                    } else {
+                        querySuggestionsDiv.textContent = "Aucune suggestion trouvée.";
+                    }
+                } catch (e) {
+                    console.error("Erreur de parsing JSON pour les suggestions:", e);
+                    showMessage("Erreur lors du traitement des suggestions.", "error");
+                    querySuggestionsDiv.textContent = "Impossible d'afficher les suggestions (erreur de format).";
+                }
+            } else {
+                querySuggestionsDiv.textContent = "Impossible de récupérer les suggestions.";
+            }
+        }
+
+        async function fetchDefinition() {
+            const term = searchQueryInput.value.trim();
+            if (!term) {
+                showMessage("Veuillez entrer un terme à définir.", "info");
+                return;
+            }
+            definitionModal.style.display = 'flex';
+            const prompt = `Définis ou explique brièvement et clairement le terme suivant en français, comme pour un dictionnaire ou une encyclopédie rapide : "${term}". Si c'est une personnalité, donne une brève biographie. Si c'est un concept, explique-le.`;
+            const definitionText = await callGeminiAPI(prompt, false, null, true); 
+            if (definitionText) {
+                geminiDefinitionResultDiv.textContent = definitionText;
+            } else {
+                geminiDefinitionResultDiv.textContent = "Impossible de récupérer la définition.";
+            }
+        }
+
+        if (suggestQueriesBtn) suggestQueriesBtn.addEventListener('click', fetchSuggestedQueries);
+        if (defineTermBtn) defineTermBtn.addEventListener('click', fetchDefinition);
+        if (closeModalBtn) closeModalBtn.onclick = () => { definitionModal.style.display = 'none'; };
+        window.onclick = (event) => { if (event.target == definitionModal) definitionModal.style.display = "none"; };
+
+        // --- Fin de l'intégration Gemini ---
+
+        const searchEngines = [
+            // Web (Général)
+            { name: "Google", url: "https://www.google.com/search?q={query}", type: "traditional" },
+            { name: "Bing", url: "https://www.bing.com/search?q={query}", type: "traditional" },
+            { name: "DuckDuckGo", url: "https://duckduckgo.com/?q={query}", type: "traditional" },
+            { name: "Yahoo", url: "https://search.yahoo.com/search?p={query}", type: "traditional" },
+            { name: "Brave Search", url: "https://search.brave.com/search?q={query}", type: "traditional" },
+            { name: "Qwant", url: "https://www.qwant.com/?q={query}", type: "traditional" },
+            { name: "Ecosia", url: "https://www.ecosia.org/search?q={query}", type: "traditional" },
+            { name: "Startpage", url: "https://www.startpage.com/sp/search?query={query}", type: "traditional" },
+            { name: "Swisscows", url: "https://swisscows.com/web?query={query}", type: "traditional" },
+            { name: "Yandex", url: "https://yandex.com/search/?text={query}", type: "traditional" },
+            
+            // IA : Moteurs de Recherche
+            { name: "Perplexity AI", url: "https://www.perplexity.ai/search?q={query}", type: "ai_search_engines" },
+            { name: "You.com", url: "https://you.com/search?q={query}", type: "ai_search_engines" },
+            { name: "Phind (Développeurs)", url: "https://www.phind.com/search?q={query}", type: "ai_search_engines" },
+            { name: "AndiSearch", url: "https://andisearch.com/?q={query}", type: "ai_search_engines" },
+            { name: "Consensus", url: "https://consensus.app/results/?q={query}", type: "ai_search_engines" },
+            { name: "iAsk AI", url: "https://iask.ai/?query={query}", type: "ai_search_engines" },
+            { name: "Genspark AI", url: "https://www.genspark.ai/search?q={query}", type: "ai_search_engines" },
+
+            // IA : Assistants Conversationnels
+            { name: "ChatGPT (Site)", url: "https://chat.openai.com/", type: "ai_assistants" },
+            { name: "Claude AI (Site)", url: "https://claude.ai/", type: "ai_assistants" },
+            { name: "Gemini (Google)", url: "https://gemini.google.com/app?q={query}", type: "ai_assistants" },
+            { name: "Grok AI (X/Twitter Site)", url: "https://x.com/grok", type: "ai_assistants" },
+            { name: "Bing Copilot", url: "https://copilot.microsoft.com/?q={query}", type: "ai_assistants" },
+            { name: "Merlin AI (Infos via Google)", url: "https://www.google.com/search?q=Merlin+AI+{query}", type: "ai_assistants" },
+            
+            // IA : Génération de Contenu
+            { name: "DALL·E (via Bing Image Creator)", url: "https://www.bing.com/images/create?q={query}", type: "ai_content_generation" },
+            { name: "Synthesia (Site)", url: "https://www.synthesia.io/", type: "ai_content_generation" },
+            { name: "ElevenLabs (Site)", url: "https://elevenlabs.io/", type: "ai_content_generation" },
+            { name: "Jasper AI (Site)", url: "https://www.jasper.ai/", type: "ai_content_generation" },
+            { name: "Rytr (Site)", url: "https://rytr.me/", type: "ai_content_generation" },
+
+            // IA : Traduction & Écriture
+            { name: "Grammarly (Site)", url: "https://www.grammarly.com/", type: "ai_translation_writing" },
+            { name: "DeepL Traduction", url: "https://www.deepl.com/translator#auto/fr/{query}", type: "ai_translation_writing" },
+            { name: "Otter.ai (Site)", url: "https://otter.ai/", type: "ai_translation_writing" },
+            { name: "NotebookLM (Site)", url: "https://notebooklm.google.com/", type: "ai_translation_writing" },
+            { name: "Felo AI (Site)", url: "https://felo.me/", type: "ai_translation_writing" },
+
+            // IA : Programmation & Dev
+            { name: "GitHub Copilot (Infos)", url: "https://github.com/features/copilot", type: "ai_programming_dev" },
+            { name: "CodiumAI (Site)", url: "https://www.codium.ai/", type: "ai_programming_dev" },
+            { name: "Tabnine (Site)", url: "https://www.tabnine.com/", type: "ai_programming_dev" },
+            { name: "Blackbox AI (Site)", url: "https://www.blackbox.ai/", type: "ai_programming_dev" },
+            
+            // IA : Autres IA Notables
+            { name: "Mistral AI (Site)", url: "https://mistral.ai/", type: "ai_other_notable" },
+            { name: "Monica AI (Site)", url: "https://monica.im/", type: "ai_other_notable" },
+            { name: "Microsoft Aurora (Infos via Google)", url: "https://www.google.com/search?q=Microsoft+Aurora+AI", type: "ai_other_notable" },
+            { name: "Webpilot AI (Site)", url: "https://www.webpilot.ai/", type: "ai_other_notable" },
+            { name: "Liner AI (Site)", url: "https://liner.ai/", type: "ai_other_notable" },
+
+            // Images
+            { name: "Google Images", url: "https://www.google.com/search?tbm=isch&q={query}", type: "images" },
+            { name: "Bing Images", url: "https://www.bing.com/images/search?q={query}", type: "images" },
+            { name: "Yahoo Images", url: "https://images.search.yahoo.com/search/images?p={query}", type: "images" },
+            { name: "Pinterest", url: "https://www.pinterest.com/search/pins/?q={query}", type: "images" },
+            { name: "Flickr", url: "https://www.flickr.com/search/?text={query}", type: "images" },
+            { name: "Pexels (Photos gratuites)", url: "https://www.pexels.com/search/{query}/", type: "images" },
+            { name: "Unsplash (Photos gratuites)", url: "https://unsplash.com/s/photos/{query}", type: "images" },
+            { name: "Giphy (GIFs)", url: "https://giphy.com/search/{query}", type: "images" },
+
+            // Vidéos
+            { name: "YouTube", url: "https://www.youtube.com/results?search_query={query}", type: "videos" },
+            { name: "Google Vidéos", url: "https://www.google.com/search?tbm=vid&q={query}", type: "videos" },
+            { name: "Bing Vidéos", url: "https://www.bing.com/videos/search?q={query}", type: "videos" },
+            { name: "Vimeo", url: "https://vimeo.com/search?q={query}", type: "videos" },
+            { name: "Dailymotion", url: "https://www.dailymotion.com/search/{query}", type: "videos" },
+            { name: "Twitch", url: "https://www.twitch.tv/search?term={query}", type: "videos" },
+
+            // Actualités
+            { name: "Google Actualités", url: "https://news.google.com/search?q={query}", type: "news" },
+            { name: "Bing Actualités", url: "https://www.bing.com/news/search?q={query}", type: "news" },
+            { name: "Le Monde", url: "https://www.lemonde.fr/recherche/?keywords={query}", type: "news" },
+            { name: "Franceinfo", url: "https://www.francetvinfo.fr/recherche/?request={query}", type: "news" },
+            { name: "Reuters", url: "https://www.reuters.com/search/news?blob={query}", type: "news" },
+            { name: "AP News", url: "https://apnews.com/search?q={query}", type: "news" },
+
+            // Shopping
+            { name: "Google Shopping", url: "https://www.google.com/search?tbm=shop&q={query}", type: "shopping" },
+            { name: "Amazon.fr", url: "https://www.amazon.fr/s?k={query}", type: "shopping" },
+            { name: "eBay.fr", url: "https://www.ebay.fr/sch/i.html?_nkw={query}", type: "shopping" },
+            { name: "Cdiscount", url: "https://www.cdiscount.com/search/10/{query}.html", type: "shopping" },
+            { name: "Fnac.com", url: "https://www.fnac.com/SearchResult/ResultList.aspx?Search={query}", type: "shopping" },
+            { name: "Etsy", url: "https://www.etsy.com/search?q={query}", type: "shopping" },
+            { name: "AliExpress", url: "https://www.aliexpress.com/wholesale?SearchText={query}", type: "shopping" },
+            { name: "Le Bon Coin", url: "https://www.leboncoin.fr/recherche?text={query}", type: "shopping" },
+
+
+            // Cartes & Itinéraires
+            { name: "Google Maps", url: "https://www.google.com/maps/search/{query}", type: "maps" },
+            { name: "Bing Maps", url: "https://www.bing.com/maps?q={query}", type: "maps" },
+            { name: "OpenStreetMap", url: "https://www.openstreetmap.org/search?query={query}", type: "maps" },
+            { name: "Mappy", url: "https://fr.mappy.com/#/MSR/q/{query}/", type: "maps" },
+            { name: "Waze Live Map", url: "https://www.waze.com/live-map/directions?q={query}", type: "maps" },
+
+
+            // Livres & Documents
+            { name: "Google Livres", url: "https://www.google.com/search?tbm=bks&q={query}", type: "books" },
+            { name: "Amazon Livres (FR)", url: "https://www.amazon.fr/s?k={query}&i=stripbooks", type: "books" },
+            { name: "Fnac Livres", url: "https://www.fnac.com/SearchResult/ResultList.aspx?SCat=2!1&Search={query}", type: "books" },
+            { name: "Project Gutenberg", url: "https://www.gutenberg.org/ebooks/search/?query={query}&submit_search=Go", type: "books" },
+            { name: "Open Library", url: "https://openlibrary.org/search?q={query}", type: "books" },
+
+            // Musique
+            { name: "YouTube Music", url: "https://music.youtube.com/search?q={query}", type: "music" },
+            { name: "Spotify", url: "https://open.spotify.com/search/{query}", type: "music" },
+            { name: "Deezer", url: "https://www.deezer.com/search/{query}", type: "music" },
+            { name: "SoundCloud", url: "https://soundcloud.com/search?q={query}", type: "music" },
+            { name: "Bandcamp", url: "https://bandcamp.com/search?q={query}", type: "music" },
+
+            // Académique & Scientifique
+            { name: "Google Scholar", url: "https://scholar.google.com/scholar?q={query}", type: "academic" },
+            { name: "Semantic Scholar", url: "https://www.semanticscholar.org/search?q={query}", type: "academic" },
+            { name: "CORE (Articles)", url: "https://core.ac.uk/search?q={query}", type: "academic" },
+            { name: "BASE (Recherche)", url: "https://www.base-search.net/Search/Results?lookfor={query}", type: "academic" },
+            { name: "arXiv (Science)", url: "https://arxiv.org/search/?query={query}&searchtype=all&source=header", type: "academic" },
+            { name: "PubMed (Biomédical)", url: "https://pubmed.ncbi.nlm.nih.gov/?term={query}", type: "academic" },
+            { name: "Persée (Humanités FR)", url: "https://www.persee.fr/search?q={query}", type: "academic" },
+            { name: "Cairn.info (Sciences Humaines FR)", url: "https://www.cairn.info/resultats_recherche.php?searchTerm={query}", type: "academic" },
+
+
+            // Code & Développement
+            { name: "GitHub", url: "https://github.com/search?q={query}", type: "developer" },
+            { name: "Stack Overflow", url: "https://stackoverflow.com/search?q={query}", type: "developer" },
+            { name: "GitLab", url: "https://gitlab.com/search?search={query}", type: "developer" },
+            { name: "MDN Web Docs", url: "https://developer.mozilla.org/search?q={query}", type: "developer" },
+            { name: "DevDocs.io", url: "https://devdocs.io/#q={query}", type: "developer" },
+
+            // Réseaux Sociaux & Forums
+            { name: "Twitter / X", url: "https://twitter.com/search?q={query}", type: "social" },
+            { name: "Reddit", url: "https://www.reddit.com/search/?q={query}", type: "social" },
+            { name: "LinkedIn (Contenu)", url: "https://www.linkedin.com/search/results/content/?keywords={query}", type: "social" },
+            { name: "Facebook", url: "https://www.facebook.com/search/top/?q={query}", type: "social" },
+            { name: "TikTok", url: "https://www.tiktok.com/search?q={query}", type: "social" },
+            { name: "Quora", url: "https://www.quora.com/search?q={query}", type: "social" },
+            { name: "jeuxvideo.com (Forums)", url: "https://www.jeuxvideo.com/recherche/forums/{query}", type: "social" },
+
+
+            // Voyages & Tourisme
+            { name: "Google Flights (via recherche)", url: "https://www.google.com/search?q=vols+{query}", type: "travel" },
+            { name: "Booking.com", url: "https://www.booking.com/searchresults.fr.html?ss={query}", type: "travel" },
+            { name: "Skyscanner.fr (Vols)", url: "https://www.skyscanner.fr/transport/flights/pari/{query}/", type: "travel" },
+            { name: "Kayak.fr", url: "https://www.kayak.fr/s?a=search&q={query}", type: "travel" },
+            { name: "Airbnb", url: "https://www.airbnb.fr/s/homes?query={query}", type: "travel" },
+
+            // Emplois & Carrière
+            { name: "LinkedIn Emplois", url: "https://www.linkedin.com/jobs/search/?keywords={query}", type: "jobs" },
+            { name: "Indeed.fr", url: "https://fr.indeed.com/jobs?q={query}", type: "jobs" },
+            { name: "Google Emplois (via recherche)", url: "https://www.google.com/search?q=emploi+{query}&ibp=htl;jobs", type: "jobs" },
+            { name: "Meteojob", url: "https://www.meteojob.com/jobs/q-{query}", type: "jobs" },
+            { name: "APEC (Cadres FR)", url: "https://www.apec.fr/candidat/recherche-emploi.html/emploi?motsCles={query}", type: "jobs" },
+            { name: "Welcome to the Jungle", url: "https://www.welcometothejungle.com/fr/jobs?query={query}", type: "jobs" },
+
+
+            // Santé & Bien-être
+            { name: "WebMD", url: "https://www.webmd.com/search/search_results/default.aspx?query={query}", type: "health" },
+            { name: "Mayo Clinic", url: "https://www.mayoclinic.org/search/search-results?q={query}", type: "health" },
+            { name: "Vidal.fr (Médicaments)", url: "https://www.vidal.fr/recherche/index/{query}.htm", type: "health" },
+            { name: "Doctissimo", url: "https://www.doctissimo.fr/sante/recherche/{query}", type: "health" },
+
+            // Recettes de Cuisine
+            { name: "Google Recettes (via recherche)", url: "https://www.google.com/search?q=recette+{query}", type: "recipes" },
+            { name: "Marmiton", url: "https://www.marmiton.org/recettes/recherche.aspx?aqt={query}", type: "recipes" },
+            { name: "CuisineAZ", url: "https://www.cuisineaz.com/recherche/query/{query}", type: "recipes" },
+            { name: "750g", url: "https://750g.com/rechercher.htm?search={query}", type: "recipes" },
+
+            // Finance & Bourse
+            { name: "Google Finance", url: "https://www.google.com/finance/search?q={query}", type: "finance" },
+            { name: "Yahoo Finance", url: "https://finance.yahoo.com/lookup?s={query}", type: "finance" },
+            { name: "Bloomberg", url: "https://www.bloomberg.com/search?query={query}", type: "finance" },
+            { name: "Les Echos Investir", url: "https://investir.lesechos.fr/recherche/globale?texte={query}", type: "finance" },
+            { name: "Boursorama", url: "https://www.boursorama.com/recherche/{query}", type: "finance" },
+
+
+            // Référence & Utilitaires
+            { name: "Wikipedia (FR)", url: "https://fr.wikipedia.org/w/index.php?search={query}", type: "reference" },
+            { name: "Wikitionnaire (FR)", url: "https://fr.wiktionary.org/wiki/Special:Search?search={query}", type: "reference" },
+            { name: "Internet Archive", url: "https://archive.org/search.php?query={query}", type: "reference" },
+            { name: "WolframAlpha (Calcul)", url: "https://www.wolframalpha.com/input/?i={query}", type: "reference" },
+            { name: "Larousse.fr (Dictionnaire)", url: "https://www.larousse.fr/dictionnaires/francais/{query}", type: "reference" },
+            { name: "Synonymes.com", url: "https://www.synonymo.fr/synonyme/{query}", type: "reference" },
+        ];
+
+        const searchForm = document.getElementById('searchForm');
+        const currentYearSpan = document.getElementById('currentYear');
+
+        const engineGroups = {
+            traditional: { label: "Web (Général)", engines: [] },
+            ai_search_engines: { label: "IA : Moteurs de Recherche", engines: [] }, 
+            ai_assistants: { label: "IA : Assistants Conversationnels", engines: [] },
+            ai_content_generation: { label: "IA : Génération de Contenu", engines: [] },
+            ai_translation_writing: { label: "IA : Traduction & Écriture", engines: [] },
+            ai_programming_dev: { label: "IA : Programmation & Dev", engines: [] },
+            ai_other_notable: { label: "IA : Autres IA Notables", engines: [] },
+            images: { label: "Images", engines: [] },
+            videos: { label: "Vidéos", engines: [] },
+            news: { label: "Actualités", engines: [] },
+            shopping: { label: "Shopping", engines: [] },
+            maps: { label: "Cartes & Itinéraires", engines: [] },
+            books: { label: "Livres & Documents", engines: [] },
+            music: { label: "Musique", engines: [] },
+            academic: { label: "Académique & Scientifique", engines: [] },
+            developer: { label: "Code & Développement", engines: [] },
+            social: { label: "Réseaux Sociaux & Forums", engines: [] },
+            travel: { label: "Voyages & Tourisme", engines: [] },
+            jobs: { label: "Emplois & Carrière", engines: [] },
+            health: { label: "Santé & Bien-être", engines: [] },
+            recipes: { label: "Recettes de Cuisine", engines: [] },
+            finance: { label: "Finance & Bourse", engines: [] },
+            reference: { label: "Référence & Utilitaires", engines: [] }
+        };
+
+        searchEngines.forEach(engine => {
+            if (engineGroups[engine.type]) {
+                engineGroups[engine.type].engines.push(engine);
+            } else {
+                if (!engineGroups.traditional) engineGroups.traditional = { label: "Autres", engines: [] }; 
+                engineGroups.traditional.engines.push(engine);
+            }
+        });
+
+        function populateSearchEngines() {
+            searchEngineSelect.innerHTML = ''; 
+            const groupOrder = [
+                "traditional", 
+                "ai_search_engines", "ai_assistants", "ai_content_generation", "ai_translation_writing", "ai_programming_dev", "ai_other_notable",
+                "images", "videos", "news", "shopping", 
+                "maps", "books", "music", "academic", "developer", "social", 
+                "travel", "jobs", "health", "recipes", "finance", "reference"
+            ];
+
+            groupOrder.forEach(groupKey => {
+                const group = engineGroups[groupKey];
+                if (group && group.engines.length > 0) {
+                    const optgroup = document.createElement('optgroup');
+                    optgroup.label = group.label;
+                    group.engines.sort((a, b) => a.name.localeCompare(b.name));
+                    group.engines.forEach(engine => {
+                        const option = document.createElement('option');
+                        option.value = engine.url;
+                        option.textContent = engine.name;
+                        optgroup.appendChild(option);
+                    });
+                    searchEngineSelect.appendChild(optgroup);
+                }
+            });
+        }
+        
+        function loadDefaultSearchEngine() {
+            const defaultUrl = localStorage.getItem('defaultSearchEngineUrl_AIO');
+            if (defaultUrl) {
+                const engineExists = searchEngines.some(engine => engine.url === defaultUrl);
+                if (engineExists) {
+                    searchEngineSelect.value = defaultUrl;
+                    setDefaultEngineCheckbox.checked = true;
+                } else {
+                    localStorage.removeItem('defaultSearchEngineUrl_AIO');
+                    setDefaultEngineCheckbox.checked = false;
+                }
+            }
+        }
+
+        function handleDefaultEngineChange() {
+            if (setDefaultEngineCheckbox.checked) {
+                localStorage.setItem('defaultSearchEngineUrl_AIO', searchEngineSelect.value);
+            } else {
+                localStorage.removeItem('defaultSearchEngineUrl_AIO');
+            }
+        }
+
+        populateSearchEngines(); 
+        loadDefaultSearchEngine(); 
+
+        setDefaultEngineCheckbox.addEventListener('change', handleDefaultEngineChange);
+        searchEngineSelect.addEventListener('change', () => {
+            if (setDefaultEngineCheckbox.checked) { 
+                handleDefaultEngineChange();
+            }
+        });
+
+
+        searchForm.addEventListener('submit', function(event) {
+            event.preventDefault(); 
+            const query = searchQueryInput.value.trim();
+            const engineUrl = searchEngineSelect.value;
+
+            if (!query && !engineUrl.includes("://")) { 
+            }
+
+
+            if (!query) {
+                const selectedEngine = searchEngines.find(engine => engine.url === engineUrl);
+                if (selectedEngine && !selectedEngine.url.includes("{query}")) {
+                } else {
+                    showMessage("Veuillez entrer un terme de recherche ou une question.", "error");
+                    searchQueryInput.focus();
+                    return;
+                }
+            }
+
+
+            if (!engineUrl) {
+                showMessage("Veuillez sélectionner une source de recherche.", "error");
+                return;
+            }
+            
+            let finalUrl = engineUrl;
+            if (engineUrl.includes("{query}")) {
+                if (!query) { 
+                     showMessage("Veuillez entrer un terme de recherche pour cette source.", "error");
+                     searchQueryInput.focus();
+                     return;
+                }
+                finalUrl = engineUrl.replace('{query}', encodeURIComponent(query));
+            } else if (query) { 
+            }
+
+
+            window.open(finalUrl, '_blank'); 
+        });
+
+        if (currentYearSpan) {
+            currentYearSpan.textContent = new Date().getFullYear();
+        }
+
+        window.onload = () => {
+            searchQueryInput.focus();
+        };
+    </script>
+</body>
+</html>
